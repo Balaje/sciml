@@ -1,7 +1,7 @@
 PDE to Gridap
 ======
 
-Julia code to obtain weak form using Gridap.jl from an elliptic PDE (from [ModelingToolkit.jl](https://github.com/SciML/ModelingToolkit.jl) and [SymbolicUtils.jl](https://github.com/gridap) **for a diagonal diffusion tensor**. Run `example.jl` for an example problem.
+Julia code to obtain weak form (using [Gridap.jl](https://github.com/gridap)) from an elliptic PDE (from [ModelingToolkit.jl](https://github.com/SciML/ModelingToolkit.jl) and [SymbolicUtils.jl](https://github.com/JuliaSymbolics/SymbolicUtils.jl) **for a diagonal diffusion tensor**. Run `example.jl` for an example problem.
 
 # Details
 Setup:
