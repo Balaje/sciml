@@ -3,6 +3,18 @@ PDE to Gridap
 
 Julia code to obtain weak form (using [Gridap.jl](https://github.com/gridap)) for the Poisson equation (defined using [ModelingToolkit.jl](https://github.com/SciML/ModelingToolkit.jl) and [SymbolicUtils.jl](https://github.com/JuliaSymbolics/SymbolicUtils.jl), *for a diagonal diffusion tensor*. Run `example.jl` for an example problem.
 
+The method is based on the `@rules` macro from the `SymbolicUtils.jl` package
+
+
+```Julia
+isDiff = T -> T isa Differential
+
+rule1 = @rule (~x::isDiff)((~~w)) => ((~~w))*(~x); # Integration by parts @rule
+
+rule2 = (~b)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b) # Rule 1
+rule3 = @rule (~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => ~~a   # Rule 2
+```
+
 # Details
 Setup:
 
