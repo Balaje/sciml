@@ -12,8 +12,7 @@ import Gridap: ∇
 isDiff = T -> T isa Differential
 
 # The IBP rule for single PD.
-getargDiff = @rule (~x::isDiff)((~~w)) => ((~~w))*(~x);
-
+IBP_rule_vol = @rule (~x::isDiff)((~~w)) => ((~~w))*(~x);
 
 """
 IBP(T, testfunc)
@@ -24,15 +23,16 @@ IBP(T, testfunc)
 
 """
 #Function to do the IBP on all terms
-function IBP(T, testFunc)
+function IBP(T)
+    @syms vh
     if(length(SymbolicUtils.arguments(T))==1)
-        opsum=getargDiff(T).outer*getargDiff(T).inner(testFunc);
+        opsum=IBP_rule_vol(T).outer*IBP_rule_vol(T).inner(vh);
         return opsum[1];
     else
         opsum=Array{Any}(undef, length(SymbolicUtils.arguments(T)));
         m=1
         for X=SymbolicUtils.arguments(T)
-            op=getargDiff(X).outer*getargDiff(X).inner(testFunc);
+            op=IBP_rule_vol(X).outer*IBP_rule_vol(X).inner(vh);
             opsum[m]=op[1];
             m+=1;
         end
@@ -42,7 +42,7 @@ end
 
 """
 
-sym2coef(T)
+wf2coef(T)
 
     Input:
         1) T = Symbolic weak form terms
@@ -56,8 +56,12 @@ function wf2coef(T)
     # Define some rules
     r1=@rule (~b)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b)
     r2=@rule (~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => ~~a
-
     r1_order=@rule (~~b)*(~w::isDiff)(~z)*(~~a) => (~w).x
+
+    # --- Should be removed ---
+    if((!@isdefined(x)) | (!@isdefined(y)))
+        @parameters x y
+    end
 
     # Rule for non-linearity [To implement].
     # r3 = @rule (~x)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b)
@@ -99,12 +103,16 @@ pde2gridapWF(LHS, RHS, dΩ, domain, partition, dbc)
 
 """
 function pde2gridapWF(DD, f, domain, partition, dbc)
-    @syms vh
-    term1=IBP(DD, vh) # The weak form of the LHS (In symbolic weak form)
+    term1=IBP(DD) # The weak form of the LHS (In symbolic weak form)
     coeffs,order = wf2coef(term1)
     # Arrange according to dict order
     term1[order]=term1
     coeffs[order]=coeffs
+
+    ##--- Should be removed ---
+    if((!@isdefined(x)) | (!@isdefined(y)))
+        @parameters x y
+    end
 
     # Convert syms to function
     coeff_func=Array{Any}(undef, length(coeffs))
