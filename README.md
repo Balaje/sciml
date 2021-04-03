@@ -12,7 +12,7 @@ isDiff = T -> T isa Differential
 rule1 = @rule (~x::isDiff)((~~w)) => ((~~w))*(~x); # Integration by parts @rule
 
 # To get coefficients
-rule2 = (~b)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b) # Rule 1
+rule2 = @rule (~b)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b) # Rule 1
 rule3 = @rule (~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => ~~a   # Rule 2
 ```
 
