@@ -17,10 +17,10 @@ isDiff = T -> T isa Differential
 IBP_rule_vol = @rule (~x::isDiff)((~~w)) => ((~~w))*(~x);
 IBP_rule_face = @rule (~x::isDiff)((~~w)) => ((~~w))*boundary_normal;
 # Rules for determining coefficients.
-# TODO: Should work on reducing these cases to 1 by rearranging (~isDiff)*(~isDiff)*(~~a)
+# TODO: Try to test more rules.
 r1=@rule (~b)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b)
 r2=@rule (~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => ~~a
-r3=@rule (~x::isDiff)(~y)*(~b)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b)
+r3=@rule (~x::isDiff)(~y)*(~~b)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~~b)
 r4=@rule (~x::isDiff)(~y)*(~~a)*(~w::isDiff)(~z) => (~~a)
 # Rule to obtain the order of differentiation in the test function
 r1_order=@rule (~~b)*(~w::isDiff)(~z)*(~~a) => (~w).x
@@ -178,7 +178,6 @@ function FEMProblem(pdesys,partition)
 
     # Compute the right hand side function
     l = a -> substitute(pderhs, Dict([x => a[1], y => a[2]]));
-    @show l([1,1])
 
     #Function to get the DBC to transfer to gridap
     function dbc(a)
