@@ -26,7 +26,7 @@ domains = [x ∈ IntervalDomain(0.0,1.0),
 
 pdesys = PDESystem(eq,bcs,domains,[x,y],[u(x,y)])
 
-uh,Ω = sym2gridap.FEMProblem(pdesys,(4,4))
-writevtk(Ω,"results",cellfields=["uh"=>uh])
-#term1 = sym2gridap.IBP(eq.lhs)
-#term2 = sym2gridap.wf2coef(term1)
+#uh,Ω = sym2gridap.FEMProblem(pdesys,(4,4))
+#writevtk(Ω,"results",cellfields=["uh"=>uh])
+term1 = sym2gridap.IBP(eq.lhs)
+term2 = sym2gridap.wf2coef(term1)

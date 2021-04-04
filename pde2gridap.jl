@@ -21,10 +21,19 @@ IBP_rule_face = @rule (~x::isDiff)((~~w)) => ((~~w))*boundary_normal;
 r1=@rule (~b)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b)
 r2=@rule (~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => ~~a
 r3=@rule (~x::isDiff)(~y)*(~b)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b)
-r4=@rule (~x::isDiff)(~y)*(~a)*(~w::isDiff)(~z) => (~a)
+r4=@rule (~x::isDiff)(~y)*(~~a)*(~w::isDiff)(~z) => (~~a)
 # Rule to obtain the order of differentiation in the test function
 r1_order=@rule (~~b)*(~w::isDiff)(~z)*(~~a) => (~w).x
 
+# For error handling since r3/r4 throws error instead of nothing
+function r34(T)
+    X=try
+        r3(T)
+    catch
+        r4(T)
+    end
+    return X;
+end
 
 """
 IBP(T, testfunc)
@@ -85,6 +94,9 @@ function wf2coef(T)
         for term=T
             op_order[count]=DD[r1_order(term)]
             op[count]=(r1(term) == nothing ? r2(term) : r1(term))
+            if(op[count]==nothing)
+                op[count]=r34(term)
+            end
             op[count] = (op[count]== Term{Number,Nothing}[]) ? 1 : prod(op[count])
             count+=1;
         end
