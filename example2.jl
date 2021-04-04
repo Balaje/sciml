@@ -14,11 +14,19 @@ include("pde2gridap.jl")
 
 Dx= Differential(x);
 Dy= Differential(y);
-eq= Dx(sin(x*y)*Dx(u(x,y))) + Dy(x^2*Dy(u(x,y))) ~ 0;
+#eq= Dx(Dx(u(x,y))) + Dy(Dy(u(x,y))) ~ 0;
+eq= Dx(x^2*Dx(u(x,y))) + Dy(y^2*Dy(u(x,y)))~ -sin(y)*(2*x*exp(x) + x^2*exp(x)) - exp(x)*(y^2*cos(y)+2*y*sin(y))
+bcs = [u(0,y) ~ sin(y),
+       u(1,y) ~ exp(1)*sin(y),
+       u(x,0) ~ 0,
+       u(x,1) ~ exp(x)*sin(1)]
 
-DD=eq.lhs
+domains = [x ∈ IntervalDomain(0.0,1.0),
+           y ∈ IntervalDomain(0.0,1.0)]
 
+pdesys = PDESystem(eq,bcs,domains,[x,y],[u(x,y)])
 
-l = a -> substitute(eq.rhs, Dict([x => a[1], y => a[2]]))
-dbc(x) = x[1]
-op1,symWF,symCoeff=sym2gridap.pde2gridapWF(DD, l, (0,1,0,1), (4,4), dbc);
+uh,Ω = sym2gridap.FEMProblem(pdesys,(4,4))
+writevtk(Ω,"results",cellfields=["uh"=>uh])
+#term1 = sym2gridap.IBP(eq.lhs)
+#term2 = sym2gridap.wf2coef(term1)

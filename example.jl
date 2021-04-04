@@ -24,6 +24,7 @@ partition = (4,4)
 
 f(x) = 0
 dbc(x) = x[1]
+@show dbc([π,π/2])
 
 # Do it from PDE and find the Gridap affine operator
 op1,symWF,symCoeff=sym2gridap.pde2gridapWF(DD, f, domain, partition, dbc)
