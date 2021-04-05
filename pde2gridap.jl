@@ -6,27 +6,28 @@ using SymbolicUtils.Rewriters
 using Gridap
 import Gridap: ∇
 
-    @syms w x y z
-@syms vh boundary_normal
+    @syms vh boundary_normal
 
 # Function to determine if the input is a Differential
 isDiff = T -> T isa Differential
 
-## --- List of rules for FEM algebra
+## --- List of rules for FEM
 # The IBP rule for single PD.
 IBP_rule_vol = @rule (~x::isDiff)((~~w)) => ((~~w))*(~x);
-IBP_rule_face = @rule (~x::isDiff)((~~w)) => ((~~w))*boundary_normal;
+IBP_rule_face = @rule (~x::isDiff)((~~w)) => ((~~w))*boundary_normal; # For nbc/rbc
+
 # Rules for determining coefficients.
-# TODO: Try to test more rules.
+# TODO: Test more cases
 r1=@rule (~b)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b)
 r2=@rule (~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => ~~a
 r3=@rule (~x::isDiff)(~y)*(~b)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b)
 r4=@rule (~x::isDiff)(~y)*(~~a)*(~w::isDiff)(~z) => (~~a)
+r_nl = @rule (~y)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~y) # Rule for non-linearity [To implement].
 # Rule to obtain the order of differentiation in the test function
 r1_order=@rule (~~b)*(~w::isDiff)(~z)*(~~a) => (~w).x
 
 """
-IBP(T, testfunc)
+IBP(T)
         Input:
             1) T = Full PDE.
                     Eg. Differential(x)(Differential(x)(w)*(x^2)) + Differential(y)(Differential(y)(w)*(y^2 + (x^2)*(y^2)))
@@ -52,21 +53,20 @@ end
 
 """
 
-wf2coef(T)
+wf2coef(T, indvars)
 
     Input:
         1) T = Symbolic weak form terms
+        2) indvars = independent variables
 
     Output:
         2) op: Symbolic coefficients
            order: Order in with the derivatives are arranged.
-            [x => 1, y => 2, z => 3]
+            [indvars[1] => 1, indvars[2] => 2]
 """
 function wf2coef(T, indvars)
     # Define some rules
 
-    # Rule for non-linearity [To implement].
-    # r3 = @rule (~x)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b)
     if((r1(T) != nothing) | (r2(T) != nothing))
         op=(r1(T) == nothing ? r2(T) : r1(T))
         op=(op == nothing ? r3(T) : op)
@@ -76,9 +76,11 @@ function wf2coef(T, indvars)
         op=Array{Any}(undef,length(T))
         op_order=Array{Any}(undef,length(T))
         count=1
-        DD=Dict([indvars[1] => 1, indvars[2] => 2])
+        DD=Dict([indvars[1] => 1, indvars[2] => 2]) # Only 2D implemented
         for term=T
             op_order[count]=DD[r1_order(term)]
+
+            # Checking different rules to determine the coefficients.
             op[count]=(r1(term) == nothing ? r2(term) : r1(term))
             op[count]=(op[count] == nothing ? r3(term) : op[count])
             op[count]=(op[count] == nothing ? r4(term) : op[count])
@@ -93,13 +95,15 @@ end
 
 """
 
-pde2gridapWF(LHS, RHS, dΩ, domain, partition, dbc)
+pde2gridapWF(LHS, RHS, dΩ, domain, partition, dbc, nbc=0)
 
     Input:
         1) LHS = LHS of the PDE, PDESystem.lhs
         2) RHS = RHS load function, PDESystem.rhs
         3) domain = computational domain Eg. domain = (0,1,0,1)
-        4) dbc = Dirichlet boundary condition Eg. dbc = x[1]
+        4) partition = partition along x and y axes Eg. (4,4)
+        5) dbc = Dirichlet boundary conditions, pdesys.dbc
+        6) nbc = Neumann boundary conditions
 
     Output:
         1) AffineFEOperator, containing the matrix-vector equation
@@ -107,24 +111,25 @@ pde2gridapWF(LHS, RHS, dΩ, domain, partition, dbc)
         3) Coefficients of the diffusion tensor.
 
 """
-function pde2gridapWF(pdelhs, pderhs, domain, partition, pdebcs, indvars)
+function pde2gridapWF(pdelhs, pderhs, domain, partition, pdebcs, indvars, nbc=0)
     term1=IBP(pdelhs) # The weak form of the LHS (In symbolic weak form)
     coeffs,order = wf2coef(term1, indvars)
     # Arrange according to dict order
     term1[order]=term1
     coeffs[order]=coeffs
 
-
-    # Convert syms to function
+    # Convert variables to Gridap function
     coeff_func=Array{Any}(undef, length(coeffs))
     for m=1:length(coeffs)
         coeff_func[m] = a-> substitute(coeffs[m], Dict([indvars[1] => a[1], indvars[2] => a[2]]))
     end
     K1(x)=TensorValue(coeff_func[1](x), 0, 0, coeff_func[2](x)); # For 2D problems only
-    # Construct RHS function
+
+    # RHS function
     f = a -> substitute(pderhs, Dict([indvars[1] => a[1], indvars[2] => a[2]]));
 
-    #Function to get the DBC to transfer to gridap
+    #DBC to transfer to gridap
+    # TODO: Using labels instead of functions like u(1,x).
     function dbc(a)
         bcvals=zeros(Float64,length(pdebcs))
         rep_count=0;
@@ -133,20 +138,21 @@ function pde2gridapWF(pdelhs, pderhs, domain, partition, pdebcs, indvars)
 
             bcargs_x=a-> substitute(bc.lhs.arguments[1],Dict([indvars[1]=>a[1], indvars[2]=>a[2]]))
             bcargs_y=a-> substitute(bc.lhs.arguments[2],Dict([indvars[1]=>a[1], indvars[2]=>a[2]]))
-            # --- TODO: Add condition to check if the values are within domain
-            # ---
+
+            # --- TODO: Add condition to check if the input values are within domain
             bcfunc = a-> substitute(bc.rhs, Dict([indvars[1]=>a[1], indvars[2]=>a[2]]))
 
             bcvals[m]=convert(Int64,(a[1] == bcargs_x(a)))*
-                convert(Int64,(a[2] == bcargs_y(a)))*bcfunc(a);
-            if((a[1]==bcargs_x(a)) & (a[2]==bcargs_y(a)))
+                convert(Int64,(a[2] == bcargs_y(a)))*bcfunc(a); #DBC value
+
+            if((a[1]==bcargs_x(a)) & (a[2]==bcargs_y(a))) # Account for repetitions
                 rep_count+=1;
             end
         end
         return sum(bcvals)/rep_count;
     end
 
-    # Build gridap discretization
+    # Build Gridap discretization
     print("Building FEM Problem")
     model = CartesianDiscreteModel(domain,partition)
     order = 1;
@@ -169,7 +175,7 @@ function FEMProblem(pdesys,partition)
     pdebcs=pdesys.bcs;
     indvars=pdesys.indvars
 
-    # Get Gridap style domain 2D/3D
+    # Get Gridap style domain in 2D/3D
     if(length(indvars)==2)
         Gridapdomain=((pdesys.domain[1].variables == convert(Sym,indvars[1]))*(pdesys.domain[1].domain.lower),
                       (pdesys.domain[1].variables == convert(Sym,indvars[1]))*(pdesys.domain[1].domain.upper),
@@ -188,7 +194,7 @@ function FEMProblem(pdesys,partition)
     operator,Ω=pde2gridapWF(pdelhs,pderhs,Gridapdomain,partition,pdebcs,indvars);
 
     uh=solve(operator)
-    return uh,Ω
+    return uh,Ω,operator
 end
 
 end

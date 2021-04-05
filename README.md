@@ -10,7 +10,6 @@ The method is based on the `@rules` macro from the `SymbolicUtils.jl` package
 isDiff = T -> T isa Differential
 
 rule1 = @rule (~x::isDiff)((~~w)) => ((~~w))*(~x); # Integration by parts @rule
-
 # To get coefficients
 rule2 = @rule (~b)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b) # Rule 1
 rule3 = @rule (~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => ~~a   # Rule 2
@@ -27,54 +26,30 @@ using SymbolicUtils
 include("pde2gridap.jl");
 ```
 
-Define the PDE using ModelingToolkit:
+Define the PDESystem using ModelingToolkit:
 
 ``` julia
-@syms x y w vh
-DD=Differential(y)(Differential(y)(w)*sin(x*y)) + Differential(x)(Differential(x)(w)*(x^2))
-```
+@parameters a b  
+@variables u(..)
 
-To find the conforming FEM matrix-vector equations, use `sym2gridap.pde2gridapWF()` to get the affine operator associated with the PDE.
+Dx= Differential(a);  
+Dy= Differential(b);
 
-``` julia
-julia> f(x) = 0 #Griap style
-julia> dbc(x) = x[1] #Gridap style
+eq= Dx(a^2*Dx(u(a,b))) + Dy(b^2*Dy(u(a,b)))~ b^2*exp(a)*sin(b) - 2*a*exp(a)*sin(b) - a^2*exp(a)*sin(b) - 2*b*exp(a)*cos(b)
+bcs = [u(0,b) ~ sin(b),
+       u(1,b) ~ exp(1)*sin(b),
+       u(a,0) ~ 0,
+       u(a,1) ~ exp(a)*sin(1)]
 
-julia> op1,symWF,symCoeff=sym2gridap.pde2gridapWF(DD, f, (0,1,0,1), (4,4), dbc);
+domains = [a ∈ IntervalDomain(0.0,1.0),
+           b ∈ IntervalDomain(0.0,1.0)]
 
-julia> op1.op.matrix #Gives the stiffness matrix
-
-```
-The output can be compared with the full Gridap implementation which can be found in `example.jl`.
-
-
- The function `sym2gridap.pde2gridapWF()` uses the function `sym2gridap.IBP()` to do the integration by parts which outputs an array containing the terms of the weak form of the stiffness matrix.
-``` julia
-
-julia> WF=sym2gridap.IBP(DD,vh) # Outputs the terms of the weak form with vh as the test function
-
-2-element Array{Any,1}:
- Differential(y)(vh)*Differential(y)(w)*sin(x*y)
- Differential(x)(vh)*Differential(x)(w)*(x^2)
-```
-
-To get the coefficients and the order in which they are stored, use `sym2gridap.wf2coef()`. The order is used to define the diffusion tensor in Gridap.
-
-``` julia
-julia> coefs,order=sym2gridap.wf2coef(WF)
-
-julia> coefs
-2-element Array{Any,1}:
- sin(x*y)
- x^2
-
-julia> order
-2-element Array{Any,1}:
- 2
- 1
+pdesys = PDESystem(eq,bcs,domains,[a,b],[u(a,b)])
 
 ```
 
-# Ongoing work
-
-Support for other FEM methods like DG/non-conforming etc.
+Solve using `FEMProblem`
+``` julia
+uh,Ω,operator = sym2gridap.FEMProblem(pdesys,(50,50)) # (50,50) partition
+writevtk(Ω,"results",cellfields=["uh"=>uh])  # Visualize using Paraview   
+```
