@@ -5,26 +5,26 @@ import Gridap: ∇
 
 include("pde2gridap.jl")
 
-@parameters x y
+@parameters a b
 @variables u(..)
 
 #Dxx= Differential(x)^2
 #Dyy= Differential(y)^2
 #eq = Dxx(u(x,y)) ~ 0
 
-Dx= Differential(x);
-Dy= Differential(y);
+Dx= Differential(a);
+Dy= Differential(b);
 #eq= Dx(Dx(u(x,y))) + Dy(Dy(u(x,y))) ~ 0;
-eq= Dx(x^2*Dx(u(x,y))) + Dy(y^2*Dy(u(x,y)))~ -sin(y)*(2*x*exp(x) + x^2*exp(x)) - exp(x)*(y^2*cos(y)+2*y*sin(y))
-bcs = [u(0,y) ~ sin(y),
-       u(1,y) ~ exp(1)*sin(y),
-       u(x,0) ~ 0,
-       u(x,1) ~ exp(x)*sin(1)]
+eq= Dx(a^2*Dx(u(a,b))) + Dy(b^2*Dy(u(a,b)))~ b^2*exp(a)*sin(b) - 2*a*exp(a)*sin(b) - a^2*exp(a)*sin(b) - 2*b*exp(a)*cos(b)
+bcs = [u(0,b) ~ sin(b),
+       u(1,b) ~ exp(1)*sin(b),
+       u(a,0) ~ 0,
+       u(a,1) ~ exp(a)*sin(1)]
 
-domains = [x ∈ IntervalDomain(0.0,1.0),
-           y ∈ IntervalDomain(0.0,1.0)]
+domains = [a ∈ IntervalDomain(0.0,1.0),
+           b ∈ IntervalDomain(0.0,1.0)]
 
-pdesys = PDESystem(eq,bcs,domains,[x,y],[u(x,y)])
+pdesys = PDESystem(eq,bcs,domains,[a,b],[u(a,b)])
 
-uh,Ω = sym2gridap.FEMProblem(pdesys,(4,4))
+uh,Ω = sym2gridap.FEMProblem(pdesys,(50,50))
 writevtk(Ω,"results",cellfields=["uh"=>uh])

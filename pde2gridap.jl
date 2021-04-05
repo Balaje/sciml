@@ -72,12 +72,8 @@ wf2coef(T)
            order: Order in with the derivatives are arranged.
             [x => 1, y => 2, z => 3]
 """
-function wf2coef(T)
+function wf2coef(T, indvars)
     # Define some rules
-    # --- Should be removed ---
-    if((!@isdefined(x)) | (!@isdefined(y)))
-        @parameters x y
-    end
 
     # Rule for non-linearity [To implement].
     # r3 = @rule (~x)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b)
@@ -90,7 +86,7 @@ function wf2coef(T)
         op=Array{Any}(undef,length(T))
         op_order=Array{Any}(undef,length(T))
         count=1
-        DD=Dict([x => 1, y => 2, z => 3])
+        DD=Dict([indvars[1] => 1, indvars[2] => 2])
         for term=T
             op_order[count]=DD[r1_order(term)]
             op[count]=(r1(term) == nothing ? r2(term) : r1(term))
@@ -129,25 +125,21 @@ pde2gridapWF(LHS, RHS, dΩ, domain, partition, dbc)
         3) Coefficients of the diffusion tensor.
 
 """
-function pde2gridapWF(pdelhs, pderhs, domain, partition, dbc)
+function pde2gridapWF(pdelhs, pderhs, domain, partition, dbc, indvars)
     term1=IBP(pdelhs) # The weak form of the LHS (In symbolic weak form)
-    coeffs,order = wf2coef(term1)
+    coeffs,order = wf2coef(term1, indvars)
     # Arrange according to dict order
     term1[order]=term1
     coeffs[order]=coeffs
 
-    ##--- Should be removed ---
-    if((!@isdefined(x)) | (!@isdefined(y)))
-        @parameters x y
-    end
 
     # Convert syms to function
     coeff_func=Array{Any}(undef, length(coeffs))
     for m=1:length(coeffs)
-        coeff_func[m] = a-> substitute(coeffs[m], Dict([x => a[1], y => a[2]]))
+        coeff_func[m] = a-> substitute(coeffs[m], Dict([indvars[1] => a[1], indvars[2] => a[2]]))
     end
     K1(x)=TensorValue(coeff_func[1](x), 0, 0, coeff_func[2](x)); # For 2D problems only
-    f = a -> substitute(pderhs, Dict([x => a[1], y => a[2]]));
+    f = a -> substitute(pderhs, Dict([indvars[1] => a[1], indvars[2] => a[2]]));
 
     # Build gridap discretization
     print("Building FEM Problem")
@@ -166,18 +158,14 @@ function pde2gridapWF(pdelhs, pderhs, domain, partition, dbc)
 end
 
 function FEMProblem(pdesys,partition)
-
-    ### Need to use pdesys.indvars to define the parameters
-    @parameters x y
-    ###
-
     pde=pdesys.eqs;
     pdelhs=pde.lhs;
     pderhs=pde.rhs;
     pdebcs=pdesys.bcs;
+    indvars=pdesys.indvars
 
     # Compute the right hand side function
-    l = a -> substitute(pderhs, Dict([x => a[1], y => a[2]]));
+    l = a -> substitute(pderhs, Dict([indvars[1] => a[1], indvars[2] => a[2]]));
 
     #Function to get the DBC to transfer to gridap
     function dbc(a)
@@ -186,11 +174,11 @@ function FEMProblem(pdesys,partition)
         for m=1:length(pdebcs)
             bc=pdebcs[m];
 
-            bcargs_x=a-> substitute(bc.lhs.arguments[1],Dict([x=>a[1],y=>a[2]]))
-            bcargs_y=a-> substitute(bc.lhs.arguments[2],Dict([x=>a[1],y=>a[2]]))
+            bcargs_x=a-> substitute(bc.lhs.arguments[1],Dict([indvars[1]=>a[1], indvars[2]=>a[2]]))
+            bcargs_y=a-> substitute(bc.lhs.arguments[2],Dict([indvars[1]=>a[1], indvars[2]=>a[2]]))
             # --- TODO: Add condition to check if the values are within domain
             # ---
-            bcfunc = a-> substitute(bc.rhs, Dict([x=>a[1],y=>a[2]]))
+            bcfunc = a-> substitute(bc.rhs, Dict([indvars[1]=>a[1], indvars[2]=>a[2]]))
 
             bcvals[m]=convert(Int64,(a[1] == bcargs_x(a)))*
                 convert(Int64,(a[2] == bcargs_y(a)))*bcfunc(a);
@@ -202,13 +190,13 @@ function FEMProblem(pdesys,partition)
     end
 
     # Get Gridap style domain
-    Gridapdomain=((pdesys.domain[1].variables == convert(Sym,x))*(pdesys.domain[1].domain.lower),
-                  (pdesys.domain[1].variables == convert(Sym,x))*(pdesys.domain[1].domain.upper),
-                  (pdesys.domain[2].variables == convert(Sym,y))*(pdesys.domain[2].domain.lower),
-                  (pdesys.domain[2].variables == convert(Sym,y))*(pdesys.domain[2].domain.upper));
+    Gridapdomain=((pdesys.domain[1].variables == convert(Sym,indvars[1]))*(pdesys.domain[1].domain.lower),
+                  (pdesys.domain[1].variables == convert(Sym,indvars[1]))*(pdesys.domain[1].domain.upper),
+                  (pdesys.domain[2].variables == convert(Sym,indvars[2]))*(pdesys.domain[2].domain.lower),
+                  (pdesys.domain[2].variables == convert(Sym,indvars[2]))*(pdesys.domain[2].domain.upper));
 
 
-    operator,Ω=pde2gridapWF(pdelhs,pderhs,Gridapdomain,partition,dbc);
+    operator,Ω=pde2gridapWF(pdelhs,pderhs,Gridapdomain,partition,dbc,indvars);
 
     uh=solve(operator)
     return uh,Ω
