@@ -60,7 +60,7 @@ The function can also be used to solve 3D problems
 Dx=Differential(x)
 Dy=Differential(y)
 Dz=Differential(z)
-eq=Dx(x^2*Dx(u(x,y,z))) + Dy(y^2*Dy(u(x,y,z))) + Dz(z^2*Dz(u(x,y,z))) ~ 0;
+eq=Dx(Dx(u(x,y,z))) + Dy(Dy(u(x,y,z))) + Dz(Dz(u(x,y,z))) ~ 0;
 
 #usol = exp(x+y)*sin(sqrt(2)*z)
 bcs = [u(0,y,z) ~ exp(y)*sin(sqrt(2)*z),

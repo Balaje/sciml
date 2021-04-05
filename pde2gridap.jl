@@ -118,6 +118,8 @@ function pde2gridapWF(pdelhs, pderhs, domain, partition, pdebcs, indvars, nbc=0)
     term1[order]=term1
     coeffs[order]=coeffs
 
+    @show coeffs
+
     # Dictionary for substitution
     DD=a->Dict(indvars[i]=>a[i] for i=1:length(indvars))
 
@@ -136,7 +138,7 @@ function pde2gridapWF(pdelhs, pderhs, domain, partition, pdebcs, indvars, nbc=0)
             (coeff_func[1](a), 0, 0, 0, coeff_func[2](a), 0, 0, 0, coeff_func[3](a)); # For 3D problems only
         end
     K1(a)=TensorValue(diffusion_func(a))
-    @show K1([1,1,1])
+    #@show K1([1,2,3])
 
 
     # RHS function
