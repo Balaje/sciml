@@ -11,8 +11,8 @@ isDiff = T -> T isa Differential
 
 rule1 = @rule (~x::isDiff)((~~w)) => ((~~w))*(~x); # Integration by parts @rule
 # To get coefficients
-rule2 = @rule (~b)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b) # Rule 1
-rule3 = @rule (~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => ~~a   # Rule 2
+rule2=@rule (~~b)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => [(~~b);(~~a)]
+rule3=@rule (~x::isDiff)(~y)*(~~b)*(~w::isDiff)(~z)*(~~a) => [(~~a);(~~b)]
 ```
 
 # Details
@@ -50,6 +50,39 @@ pdesys = PDESystem(eq,bcs,domains,[a,b],[u(a,b)])
 
 Solve using `FEMProblem`
 ``` julia
-uh,Ω,operator = sym2gridap.FEMProblem(pdesys,(50,50)) # (50,50) partition
-writevtk(Ω,"results",cellfields=["uh"=>uh])  # Visualize using Paraview   
+uh,Ω,operator = sym2gridap.FEMProblem(pdesys,(50,50)) #(50,50) partition
+writevtk(Ω,"res2d",cellfields=["uh"=>uh]) # Visualize using gridap
 ```
+
+The function can also be used to solve 3D problems
+
+``` Julia
+Dx=Differential(x)
+Dy=Differential(y)
+Dz=Differential(z)
+eq=Dx(x^2*Dx(u(x,y,z))) + Dy(y^2*Dy(u(x,y,z))) + Dz(z^2*Dz(u(x,y,z))) ~ 0;
+
+#usol = exp(x+y)*sin(sqrt(2)*z)
+bcs = [u(0,y,z) ~ exp(y)*sin(sqrt(2)*z),
+       u(2,y,z) ~ exp(y+2)*sin(sqrt(2)*z),
+       u(x,0,z) ~ exp(x)*sin(sqrt(2)*z),
+       u(x,1,z) ~ exp(x+1)*sin(sqrt(2)*z),
+       u(x,y,0) ~ 0,
+       u(x,y,1) ~ exp(x+y)*sin(sqrt(2))];
+
+domains = [x ∈ IntervalDomain(0.0,2.0),
+           y ∈ IntervalDomain(0.0,1.0),
+           z ∈ IntervalDomain(0.0,1.0)]
+```
+
+and solve using
+
+```
+uh,Ω,operator = sym2gridap.FEMProblem(pdesys,(10,10,10)); # (10,10,10) partition
+writevtk(Ω,"res3d",cellfields=["uh"=>uh])
+```
+
+#### Output
+
+![2d](2d.png) | ![3d](3d.png)
+-- | --

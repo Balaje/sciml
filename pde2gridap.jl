@@ -11,16 +11,24 @@ import Gridap: ∇
 # Function to determine if the input is a Differential
 isDiff = T -> T isa Differential
 
-## --- List of rules for FEM
-# The IBP rule for single PD.
+"""
+Rules for IBP
+"""
+## The IBP rule for single PD.
 IBP_rule_vol = @rule (~x::isDiff)((~~w)) => ((~~w))*(~x);
-IBP_rule_face = @rule (~x::isDiff)((~~w)) => ((~~w))*boundary_normal; # For nbc/rbc
+# For nbc/rbc [TODO]
+IBP_rule_face = @rule (~x::isDiff)((~~w)) => ((~~w))*boundary_normal;
 
-# Rules for determining coefficients.
-# TODO: Test more cases
+"""
+Rules for determining coefficients. [TODO: Add more rules - convection term, reaction term]
+"""
+# Coefficient K(x,y) -∇(K(x,y)∇u)
 r1=@rule (~~b)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => [(~~b);(~~a)]
 r2=@rule (~x::isDiff)(~y)*(~~b)*(~w::isDiff)(~z)*(~~a) => [(~~a);(~~b)]
-r_nl = @rule (~y)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~y) # Rule for non-linearity [To implement].
+
+# Rule for non-linearity [To implement].
+r_nl = @rule (~y)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~y)
+
 # Rule to obtain the order of differentiation in the test function
 r1_order=@rule (~~b)*(~w::isDiff)(~z)*(~~a) => (~w).x
 
@@ -62,17 +70,16 @@ wf2coef(T, indvars)
            order: Order in with the derivatives are arranged.
             [indvars[1] => 1, indvars[2] => 2]
 """
-function wf2coef(T, indvars)
-    # Define some rules
 
+function wf2coef(T, indvars)
     if((r1(T) != nothing) | (r2(T) != nothing))
-        op=(r1(T) == nothing ? r2(T) : r1(T))
+        op=(r1(T) == nothing ? r2(T) : r1(T)) # Check rule
         return (op==Term{Number,Nothing}[]) ? 1 : prod(op);
     else
         op=Array{Any}(undef,length(T))
         op_order=Array{Any}(undef,length(T))
         count=1
-        DD=Dict([indvars[1] => 1, indvars[2] => 2]) # Only 2D implemented
+        DD=Dict(indvars[i]=>i for i=1:length(indvars))
         for term=T
             op_order[count]=DD[r1_order(term)]
             # Checking different rules to determine the coefficients.
@@ -80,7 +87,6 @@ function wf2coef(T, indvars)
             op[count] = (op[count]== Term{Number,Nothing}[]) ? 1 : prod(op[count])
             count+=1;
         end
-        @show op, op_order
         return op, op_order;
     end
 end
@@ -90,6 +96,7 @@ end
 
 pde2gridapWF(LHS, RHS, dΩ, domain, partition, dbc, nbc=0)
 
+    Only 2D implementation done
     Input:
         1) LHS = LHS of the PDE, PDESystem.lhs
         2) RHS = RHS load function, PDESystem.rhs
@@ -111,42 +118,51 @@ function pde2gridapWF(pdelhs, pderhs, domain, partition, pdebcs, indvars, nbc=0)
     term1[order]=term1
     coeffs[order]=coeffs
 
+    # Dictionary for substitution
+    DD=a->Dict(indvars[i]=>a[i] for i=1:length(indvars))
+
     # Convert variables to Gridap function
     coeff_func=Array{Any}(undef, length(coeffs))
     for m=1:length(coeffs)
-        coeff_func[m] = a-> substitute(coeffs[m], Dict([indvars[1] => a[1], indvars[2] => a[2]]))
+        coeff_func[m] = a-> substitute(coeffs[m], DD(a))
     end
-    K1(x)=TensorValue(coeff_func[1](x), 0, 0, coeff_func[2](x)); # For 2D problems only
+
+    ## 2D/3D
+
+    diffusion_func = a->
+        if length(indvars)==2
+            (coeff_func[1](a), 0, 0, coeff_func[2](a)); # For 2D problems only
+        elseif length(indvars) == 3
+            (coeff_func[1](a), 0, 0, 0, coeff_func[2](a), 0, 0, 0, coeff_func[3](a)); # For 3D problems only
+        end
+    K1(a)=TensorValue(diffusion_func(a))
+    @show K1([1,1,1])
+
 
     # RHS function
-    f = a -> substitute(pderhs, Dict([indvars[1] => a[1], indvars[2] => a[2]]));
+    f = a -> substitute(pderhs, DD(a));
 
     #DBC to transfer to gridap
     # TODO: Using labels instead of functions like u(1,x).
     function dbc(a)
-        bcvals=zeros(Float64,length(pdebcs))
-        rep_count=0;
+        bcvals=ones(Float64,length(pdebcs))
+        rep_count=0
         for m=1:length(pdebcs)
             bc=pdebcs[m];
-
-            bcargs_x=a-> substitute(bc.lhs.arguments[1],Dict([indvars[1]=>a[1], indvars[2]=>a[2]]))
-            bcargs_y=a-> substitute(bc.lhs.arguments[2],Dict([indvars[1]=>a[1], indvars[2]=>a[2]]))
-
-            # --- TODO: Add condition to check if the input values are within domain
-            bcfunc = a-> substitute(bc.rhs, Dict([indvars[1]=>a[1], indvars[2]=>a[2]]))
-
-            bcvals[m]=convert(Int64,(a[1] == bcargs_x(a)))*
-                convert(Int64,(a[2] == bcargs_y(a)))*bcfunc(a); #DBC value
-
-            if((a[1]==bcargs_x(a)) & (a[2]==bcargs_y(a))) # Account for repetitions
-                rep_count+=1;
+            bcfunc = a-> substitute(bc.rhs, DD(a))
+            bcargs=zeros(Float64,length(indvars))
+            for n=1:length(indvars)
+                bcargs[n]=substitute(bc.lhs.arguments[n],DD(a))
             end
+            bcvals[m]*=convert(Int64,(tuple(a ...) == tuple(bcargs ...)));
+            rep_count+=convert(Int64,(tuple(a ...) == tuple(bcargs ...)));
+            bcvals[m]*=bcfunc(a);
         end
         return sum(bcvals)/rep_count;
     end
 
     # Build Gridap discretization
-    print("Building FEM Problem")
+    print("Building FEM Problem \n")
     model = CartesianDiscreteModel(domain,partition)
     order = 1;
     reffe = ReferenceFE(lagrangian,Float64,order);
@@ -168,23 +184,16 @@ function FEMProblem(pdesys,partition)
     pdebcs=pdesys.bcs;
     indvars=pdesys.indvars
 
-    # Get Gridap style domain in 2D/3D
-    if(length(indvars)==2)
-        Gridapdomain=((pdesys.domain[1].variables == convert(Sym,indvars[1]))*(pdesys.domain[1].domain.lower),
-                      (pdesys.domain[1].variables == convert(Sym,indvars[1]))*(pdesys.domain[1].domain.upper),
-                      (pdesys.domain[2].variables == convert(Sym,indvars[2]))*(pdesys.domain[2].domain.lower),
-                      (pdesys.domain[2].variables == convert(Sym,indvars[2]))*(pdesys.domain[2].domain.upper));
-    else
-        Gridapdomain=((pdesys.domain[1].variables == convert(Sym,indvars[1]))*(pdesys.domain[1].domain.lower),
-                      (pdesys.domain[1].variables == convert(Sym,indvars[1]))*(pdesys.domain[1].domain.upper),
-                      (pdesys.domain[2].variables == convert(Sym,indvars[2]))*(pdesys.domain[2].domain.lower),
-                      (pdesys.domain[2].variables == convert(Sym,indvars[2]))*(pdesys.domain[2].domain.upper),
-                      (pdesys.domain[3].variables == convert(Sym,indvars[3]))*(pdesys.domain[3].domain.lower),
-                      (pdesys.domain[3].variables == convert(Sym,indvars[3]))*(pdesys.domain[3].domain.upper));
+    # Get Gridap style domain in 2D. (TODO: 3D)
+    domain=[(pdesys.domain[1].domain.lower); (pdesys.domain[1].domain.upper)];
+    for m=2:length(indvars)
+        domain=[ domain; (pdesys.domain[m].domain.lower);
+                 (pdesys.domain[m].domain.upper) ];
     end
+    Gridapdomain = tuple(domain ...)
+    @show Gridapdomain
 
-
-    operator,Ω=pde2gridapWF(pdelhs,pderhs,Gridapdomain,partition,pdebcs,indvars);
+    operator,Ω=pde2gridapWF(pdelhs,pderhs,Gridapdomain,partition,pdebcs,indvars)
 
     uh=solve(operator)
     return uh,Ω,operator
