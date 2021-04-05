@@ -18,10 +18,8 @@ IBP_rule_face = @rule (~x::isDiff)((~~w)) => ((~~w))*boundary_normal; # For nbc/
 
 # Rules for determining coefficients.
 # TODO: Test more cases
-r1=@rule (~b)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b)
-r2=@rule (~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => ~~a
-r3=@rule (~x::isDiff)(~y)*(~b)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~b)
-r4=@rule (~x::isDiff)(~y)*(~~a)*(~w::isDiff)(~z) => (~~a)
+r1=@rule (~~b)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => [(~~b);(~~a)]
+r2=@rule (~x::isDiff)(~y)*(~~b)*(~w::isDiff)(~z)*(~~a) => [(~~a);(~~b)]
 r_nl = @rule (~y)*(~x::isDiff)(~y)*(~w::isDiff)(~z)*(~~a) => (~~a)*(~y) # Rule for non-linearity [To implement].
 # Rule to obtain the order of differentiation in the test function
 r1_order=@rule (~~b)*(~w::isDiff)(~z)*(~~a) => (~w).x
@@ -69,8 +67,6 @@ function wf2coef(T, indvars)
 
     if((r1(T) != nothing) | (r2(T) != nothing))
         op=(r1(T) == nothing ? r2(T) : r1(T))
-        op=(op == nothing ? r3(T) : op)
-        op=(op == nothing ? r4(T) : op)
         return (op==Term{Number,Nothing}[]) ? 1 : prod(op);
     else
         op=Array{Any}(undef,length(T))
@@ -79,15 +75,12 @@ function wf2coef(T, indvars)
         DD=Dict([indvars[1] => 1, indvars[2] => 2]) # Only 2D implemented
         for term=T
             op_order[count]=DD[r1_order(term)]
-
             # Checking different rules to determine the coefficients.
             op[count]=(r1(term) == nothing ? r2(term) : r1(term))
-            op[count]=(op[count] == nothing ? r3(term) : op[count])
-            op[count]=(op[count] == nothing ? r4(term) : op[count])
-
             op[count] = (op[count]== Term{Number,Nothing}[]) ? 1 : prod(op[count])
             count+=1;
         end
+        @show op, op_order
         return op, op_order;
     end
 end
