@@ -53,7 +53,7 @@ Construct problem using `FEMProblem`
 prob = sym2gridap.FEMProblem(pdesys,(50,50)) #(50,50) partition
 ```
 
-Solve using FEMProblem
+Solve using `FEMSolve`
 ```julia
 uh,Ω,operator = sym2gridap.FEMSolve(prob)
 writevtk(Ω,"res2d",cellfields=["uh"=>uh]) # Visualize using gridap
@@ -78,6 +78,8 @@ bcs = [u(0,y,z) ~ exp(y)*sin(sqrt(2)*z),
 domains = [x ∈ IntervalDomain(0.0,2.0),
            y ∈ IntervalDomain(0.0,1.0),
            z ∈ IntervalDomain(0.0,1.0)]
+           
+pdesys = PDESystem(eq, bcs, domains, [x,y,z], [u(x,y,z)]);            
 ```
 
 and solve using
