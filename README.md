@@ -54,14 +54,14 @@ prob = sym2gridap.FEMProblem(pdesys,(50,50)) #(50,50) partition
 ```
 
 Solve using FEMProblem
-```
+```julia
 uh,Ω,operator = sym2gridap.FEMSolve(prob)
 writevtk(Ω,"res2d",cellfields=["uh"=>uh]) # Visualize using gridap
 ```
 
 The function can also be used to solve 3D problems
 
-``` Julia
+``` julia
 Dx=Differential(x)
 Dy=Differential(y)
 Dz=Differential(z)
@@ -82,7 +82,7 @@ domains = [x ∈ IntervalDomain(0.0,2.0),
 
 and solve using
 
-``` Julia
+``` julia
 prob = sym2gridap.FEMProblem(pdesys,(10,10,10)); # (10,10,10) partition
 uh,Ω,operator = sym2gridap.FEMSolve(prob)
 writevtk(Ω,"res3d",cellfields=["uh"=>uh])
