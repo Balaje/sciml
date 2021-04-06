@@ -8,6 +8,12 @@ import Gridap: ∇
 
     @syms vh boundary_normal
 
+# Constructor.
+struct discreteFEM
+    #K=diffusion tensor, f=right hand side
+    domain; partition; dbc; K; f;
+end
+
 # Function to determine if the input is a Differential
 isDiff = T -> T isa Differential
 
@@ -94,7 +100,7 @@ end
 
 """
 
-pde2gridapWF(LHS, RHS, dΩ, domain, partition, dbc, nbc=0)
+discretize_pde_fem(LHS, RHS, dΩ, domain, partition, dbc, nbc=0)
 
     Only 2D implementation done
     Input:
@@ -111,14 +117,17 @@ pde2gridapWF(LHS, RHS, dΩ, domain, partition, dbc, nbc=0)
         3) Coefficients of the diffusion tensor.
 
 """
-function pde2gridapWF(pdelhs, pderhs, domain, partition, pdebcs, indvars, nbc=0)
-    term1=IBP(pdelhs) # The weak form of the LHS (In symbolic weak form)
+function discretize_pde_fem(pdelhs, pderhs, domain, partition, pdebcs, indvars, nbc=0)
+
+    # The weak form of the LHS (In symbolic weak form)
+    term1=IBP(pdelhs)
+    # Obtain coefficients and order
     coeffs,order = wf2coef(term1, indvars)
-    # Arrange according to dict order
+    # Arrange according to order
     term1[order]=term1
     coeffs[order]=coeffs
 
-    @show coeffs
+    @show coeffs # Show Coeffs
 
     # Dictionary for substitution
     DD=a->Dict(indvars[i]=>a[i] for i=1:length(indvars))
@@ -130,7 +139,6 @@ function pde2gridapWF(pdelhs, pderhs, domain, partition, pdebcs, indvars, nbc=0)
     end
 
     ## 2D/3D
-
     diffusion_func = a->
         if length(indvars)==2
             (coeff_func[1](a), 0, 0, coeff_func[2](a)); # For 2D problems only
@@ -141,16 +149,19 @@ function pde2gridapWF(pdelhs, pderhs, domain, partition, pdebcs, indvars, nbc=0)
     #@show K1([1,2,3])
 
 
-    # RHS function
+    # RHS function. Will contain Neumann
     f = a -> substitute(pderhs, DD(a));
+
+    # Filter Dirichlet boundary conditions. TODO: Neumann BC
+    dbc=filter(x -> isDiff(x.lhs)==false, pdebcs)
 
     #DBC to transfer to gridap
     # TODO: Using labels instead of functions like u(1,x).
-    function dbc(a)
+    function dirichletbc(a)
         bcvals=ones(Float64,length(pdebcs))
         rep_count=0
         for m=1:length(pdebcs)
-            bc=pdebcs[m];
+            bc=dbc[m];
             bcfunc = a-> substitute(bc.rhs, DD(a))
             bcargs=zeros(Float64,length(indvars))
             for n=1:length(indvars)
@@ -163,20 +174,26 @@ function pde2gridapWF(pdelhs, pderhs, domain, partition, pdebcs, indvars, nbc=0)
         return sum(bcvals)/rep_count;
     end
 
+    problem=discreteFEM(domain, partition, dirichletbc, K1, f); # Constructor
+    return problem;
+end
+
+function FEMSolve(problem)
     # Build Gridap discretization
     print("Building FEM Problem \n")
-    model = CartesianDiscreteModel(domain,partition)
+    model = CartesianDiscreteModel(problem.domain,problem.partition)
     order = 1;
     reffe = ReferenceFE(lagrangian,Float64,order);
     V0 = TestFESpace(model, reffe, conformity=:H1,dirichlet_tags="boundary");
-    U = TrialFESpace(V0,dbc); # FE Spaces
+    U = TrialFESpace(V0,problem.dbc); # FE Spaces
     degree = 2; # Degree and domain
     Ω = Triangulation(model);
     dΩ = Measure(Ω,degree);
-    ah(u,v) = ∫( K1⋅∇(v)⊙∇(u) )*dΩ;
-    lh(v) = ∫( v*f )*dΩ;
+    ah(u,v) = ∫( problem.K⋅∇(v)⊙∇(u) )*dΩ;
+    lh(v) = ∫( v*problem.f )*dΩ;
     op = AffineFEOperator(ah,lh,U,V0);
-    return op, Ω
+    uh=solve(op)
+    return uh,Ω,op
 end
 
 function FEMProblem(pdesys,partition)
@@ -195,10 +212,9 @@ function FEMProblem(pdesys,partition)
     Gridapdomain = tuple(domain ...)
     @show Gridapdomain
 
-    operator,Ω=pde2gridapWF(pdelhs,pderhs,Gridapdomain,partition,pdebcs,indvars)
+    prob=discretize_pde_fem(pdelhs,pderhs,Gridapdomain,partition,pdebcs,indvars)
 
-    uh=solve(operator)
-    return uh,Ω,operator
+    return prob
 end
 
 end

@@ -26,6 +26,8 @@ domains = [x ∈ IntervalDomain(0.0,2.0),
            z ∈ IntervalDomain(0.0,1.0)]
 
 pdesys = PDESystem(eq, bcs, domains, [x,y,z], [u(x,y,z)]);
+prob = sym2gridap.FEMProblem(pdesys,(10,10,10));
 
-uh,Ω,operator = sym2gridap.FEMProblem(pdesys,(10,10,10));
+uh,Ω,op=sym2gridap.FEMSolve(prob);
+
 writevtk(Ω,"res3d",cellfields=["uh"=>uh])

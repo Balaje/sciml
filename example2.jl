@@ -30,6 +30,8 @@ domains = [a ∈ IntervalDomain(0.0,2.0),
            b ∈ IntervalDomain(0.0,1.0)]
 
 pdesys = PDESystem(eq,bcs,domains,[a,b],[u(a,b)])
+prob = sym2gridap.FEMProblem(pdesys,(50,50))
 
-uh,Ω,operator = sym2gridap.FEMProblem(pdesys,(50,50))
+uh,Ω,op=sym2gridap.FEMSolve(prob)
+
 writevtk(Ω,"res2d",cellfields=["uh"=>uh])

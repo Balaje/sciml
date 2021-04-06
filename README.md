@@ -48,9 +48,14 @@ pdesys = PDESystem(eq,bcs,domains,[a,b],[u(a,b)])
 
 ```
 
-Solve using `FEMProblem`
+Construct problem using `FEMProblem`
 ``` julia
-uh,Ω,operator = sym2gridap.FEMProblem(pdesys,(50,50)) #(50,50) partition
+prob = sym2gridap.FEMProblem(pdesys,(50,50)) #(50,50) partition
+```
+
+Solve using FEMProblem
+```
+uh,Ω,operator = sym2gridap.FEMSolve(prob)
 writevtk(Ω,"res2d",cellfields=["uh"=>uh]) # Visualize using gridap
 ```
 
@@ -77,8 +82,9 @@ domains = [x ∈ IntervalDomain(0.0,2.0),
 
 and solve using
 
-```
-uh,Ω,operator = sym2gridap.FEMProblem(pdesys,(10,10,10)); # (10,10,10) partition
+``` Julia
+prob = sym2gridap.FEMProblem(pdesys,(10,10,10)); # (10,10,10) partition
+uh,Ω,operator = sym2gridap.FEMSolve(prob)
 writevtk(Ω,"res3d",cellfields=["uh"=>uh])
 ```
 
