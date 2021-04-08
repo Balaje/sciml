@@ -41,3 +41,5 @@ eqs_otherterms = try rule3(updated_eqs) catch e 0 end
 @show eqs_otherterms
 
 # Define integration by parts
+
+IBP = @rule (~~y) => sum((~~y)[1].*map(x -> (x.f)(vh), (~~y)[1]))
